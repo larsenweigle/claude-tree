@@ -9,7 +9,7 @@
 tree.py - Generate file tree JSON with token counts for agent docs.
 
 Usage:
-    uv run tree.py <root_path> [--output <tree.json>]
+    uv run tree.py <root_path> [--output <tree.json>] [--path-weights <path_weights.json>]
 
 Outputs a JSON tree structure where agent docs (CLAUDE.md, AGENTS.md) include
 token counts, enabling visualization of instruction file distribution.
@@ -19,6 +19,7 @@ import argparse
 import json
 import os
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import tiktoken
@@ -222,6 +223,114 @@ def collect_agent_docs(tree: dict) -> list[dict]:
     return agent_docs
 
 
+def collect_directories(tree: dict) -> list[str]:
+    """Extract a flat list of all directory paths from the tree."""
+    directories = []
+
+    def walk(node: dict):
+        if node["type"] == "directory":
+            directories.append(node["path"])
+        for child in node.get("children", []):
+            walk(child)
+
+    walk(tree)
+    return directories
+
+
+def get_cumulative_tokens(path: str, agent_doc_tokens: dict[str, int]) -> dict:
+    """
+    Walk from root to path, accumulating tokens from agent docs along the way.
+
+    Args:
+        path: Directory path (e.g., "src/api/handlers")
+        agent_doc_tokens: Dict mapping agent doc paths to their token counts
+
+    Returns:
+        Dict with 'cumulativeTokens' and 'breakdown' list
+    """
+    parts = path.split("/") if path != "." else ["."]
+    total = 0
+    breakdown = []
+
+    # Check root first (handles both "./CLAUDE.md" and "CLAUDE.md" formats)
+    for doc_name in ["CLAUDE.md", "AGENTS.md"]:
+        for root_prefix in ["./", ""]:
+            doc_path = f"{root_prefix}{doc_name}"
+            if doc_path in agent_doc_tokens:
+                tokens = agent_doc_tokens[doc_path]
+                total += tokens
+                breakdown.append({"file": doc_path, "tokens": tokens})
+                break
+
+    # Walk down the path
+    current_path = "."
+    for part in parts:
+        if part == ".":
+            continue
+        current_path = part if current_path == "." else f"{current_path}/{part}"
+
+        # Check for agent docs in this directory
+        for doc_name in ["CLAUDE.md", "AGENTS.md"]:
+            doc_path = f"{current_path}/{doc_name}"
+            if doc_path in agent_doc_tokens:
+                tokens = agent_doc_tokens[doc_path]
+                total += tokens
+                breakdown.append({"file": doc_path, "tokens": tokens})
+
+    return {"cumulativeTokens": total, "breakdown": breakdown}
+
+
+def compute_path_weights(tree: dict, agent_docs: list[dict], root_path: str) -> dict:
+    """
+    Compute cumulative token weights for all directory paths.
+
+    Args:
+        tree: The file tree structure
+        agent_docs: List of agent docs with paths and token counts
+        root_path: Absolute path to the root directory
+
+    Returns:
+        Dict with metadata, pathWeights, and ranking
+    """
+    # Build lookup of agent doc paths to tokens
+    agent_doc_tokens = {doc["path"]: doc["tokens"] for doc in agent_docs}
+
+    # Collect all directories
+    directories = collect_directories(tree)
+
+    # Compute weights for each directory
+    path_weights = {}
+    for dir_path in directories:
+        result = get_cumulative_tokens(dir_path, agent_doc_tokens)
+        path_weights[dir_path] = result
+
+    # Build ranking (sorted by cumulative tokens, descending)
+    ranking = [
+        {"path": path, "cumulativeTokens": data["cumulativeTokens"]}
+        for path, data in path_weights.items()
+        if data["cumulativeTokens"] > 0  # Only include paths with tokens
+    ]
+    ranking.sort(key=lambda x: x["cumulativeTokens"], reverse=True)
+
+    # Find max path weight
+    max_weight = max(
+        (data["cumulativeTokens"] for data in path_weights.values()),
+        default=0
+    )
+
+    return {
+        "metadata": {
+            "generated": datetime.now(timezone.utc).isoformat(),
+            "root": root_path,
+            "totalAgentDocs": len(agent_docs),
+            "totalTokens": sum(doc["tokens"] for doc in agent_docs),
+            "maxPathWeight": max_weight,
+        },
+        "pathWeights": path_weights,
+        "ranking": ranking,
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Generate file tree JSON with token counts for agent docs"
@@ -240,6 +349,11 @@ def main():
         "--full-tree",
         action="store_true",
         help="Include all files, not just agent docs and their directories",
+    )
+    parser.add_argument(
+        "--path-weights",
+        type=str,
+        help="Output path weights JSON file (optional)",
     )
 
     args = parser.parse_args()
@@ -300,6 +414,17 @@ def main():
         print(f"\nTree written to {args.output}", file=sys.stderr)
     else:
         print(json_output)
+
+    # Generate path weights if requested
+    if args.path_weights:
+        path_weights = compute_path_weights(tree, agent_docs, str(root_path))
+        path_weights_output = json.dumps(path_weights, indent=2)
+        weights_path = Path(args.path_weights)
+        weights_path.parent.mkdir(parents=True, exist_ok=True)
+        weights_path.write_text(path_weights_output)
+        print(f"Path weights written to {args.path_weights}", file=sys.stderr)
+        print(f"  Max path weight: {path_weights['metadata']['maxPathWeight']} tokens", file=sys.stderr)
+        print(f"  Paths with tokens: {len(path_weights['ranking'])}", file=sys.stderr)
 
 
 if __name__ == "__main__":

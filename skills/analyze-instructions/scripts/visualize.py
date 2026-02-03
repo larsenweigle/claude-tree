@@ -7,13 +7,14 @@
 visualize.py - Generate interactive D3.js HTML visualization.
 
 Usage:
-    uv run visualize.py --tree <tree.json> --edges <edges.json> [--output <dir>] [--open]
+    uv run visualize.py --tree <tree.json> --edges <edges.json> [--path-weights <path_weights.json>] [--output <dir>] [--open]
 
 Features:
 - Collapsible tree view
 - Agent doc nodes colored by token count (green→yellow→red)
 - Reference edges drawn as curved lines
 - Agent walk simulator: Click any directory to see cumulative token count
+- Path weight view: Toggle to see tree links colored by cumulative token cost
 """
 
 import argparse
@@ -29,10 +30,11 @@ def load_json(path: str) -> dict:
     return json.loads(Path(path).read_text())
 
 
-def generate_html(tree_data: dict, edges_data: dict) -> str:
+def generate_html(tree_data: dict, edges_data: dict, path_weights_data: dict | None = None) -> str:
     """Generate self-contained HTML with embedded D3.js visualization."""
     tree_json = json.dumps(tree_data)
     edges_json = json.dumps(edges_data)
+    path_weights_json = json.dumps(path_weights_data) if path_weights_data else "null"
 
     return f'''<!DOCTYPE html>
 <html lang="en">
@@ -550,6 +552,100 @@ def generate_html(tree_data: dict, edges_data: dict) -> str:
         .toast.show {{
             opacity: 1;
         }}
+
+        /* View mode toggle */
+        .view-toggle {{
+            display: flex;
+            gap: 0;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            overflow: hidden;
+        }}
+
+        .view-toggle-btn {{
+            background: var(--bg-secondary);
+            border: none;
+            padding: 6px 12px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }}
+
+        .view-toggle-btn:not(:last-child) {{
+            border-right: 1px solid var(--border);
+        }}
+
+        .view-toggle-btn:hover {{
+            background: var(--bg-tertiary);
+        }}
+
+        .view-toggle-btn.active {{
+            background: var(--accent);
+            color: var(--bg-primary);
+        }}
+
+        /* Path weight mode link styles */
+        .link.path-weight-green {{
+            stroke: var(--green);
+        }}
+
+        .link.path-weight-yellow {{
+            stroke: var(--yellow);
+        }}
+
+        .link.path-weight-red {{
+            stroke: var(--red);
+        }}
+
+        /* Dimmed edges in path weight mode */
+        .edge.dimmed {{
+            opacity: 0.15;
+        }}
+
+        /* Heaviest paths list */
+        .heaviest-paths-list {{
+            max-height: 250px;
+            overflow-y: auto;
+        }}
+
+        .heaviest-path-item {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 8px;
+            font-size: 11px;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: background 0.15s ease;
+        }}
+
+        .heaviest-path-item:hover {{
+            background: var(--bg-tertiary);
+        }}
+
+        .heaviest-path-item .rank {{
+            color: var(--text-muted);
+            font-weight: 500;
+            margin-right: 8px;
+            min-width: 18px;
+        }}
+
+        .heaviest-path-item .path {{
+            color: var(--text-secondary);
+            font-family: monospace;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            flex: 1;
+            min-width: 0;
+        }}
+
+        .heaviest-path-item .tokens {{
+            font-weight: 600;
+            flex-shrink: 0;
+            margin-left: 8px;
+        }}
     </style>
 </head>
 <body>
@@ -573,6 +669,10 @@ def generate_html(tree_data: dict, edges_data: dict) -> str:
                 <button class="control-btn" onclick="collapseLevel()">Collapse Level</button>
                 <button class="control-btn" onclick="resetView()">Reset</button>
                 <button class="control-btn" onclick="fitToView()">Fit</button>
+                <div class="view-toggle" id="view-toggle" style="display: none;">
+                    <button class="view-toggle-btn active" data-mode="tokens" onclick="setViewMode('tokens')">Token Count</button>
+                    <button class="view-toggle-btn" data-mode="pathWeight" onclick="setViewMode('pathWeight')">Path Weight</button>
+                </div>
                 <span class="depth-status" id="depth-status">Depth: 2 / -</span>
                 <span class="selected-status" id="selected-status">Selected: None</span>
             </div>
@@ -646,6 +746,12 @@ def generate_html(tree_data: dict, edges_data: dict) -> str:
                 <div class="agent-docs-ranking" id="agent-docs-ranking"></div>
             </div>
 
+            <div class="sidebar-section" id="heaviest-paths-section" style="display: none;">
+                <h2>Heaviest Paths</h2>
+                <div class="instructions">Top directories by cumulative token cost when Claude works there.</div>
+                <div class="heaviest-paths-list" id="heaviest-paths-list"></div>
+            </div>
+
             <div class="sidebar-section">
                 <h2>Agent Walk Simulator</h2>
                 <div class="instructions">
@@ -682,6 +788,7 @@ def generate_html(tree_data: dict, edges_data: dict) -> str:
         // Injected data
         const TREE_DATA = {tree_json};
         const EDGES_DATA = {edges_json};
+        const PATH_WEIGHTS_DATA = {path_weights_json};
 
         // Build lookup maps
         const nodeByPath = new Map();
@@ -866,6 +973,109 @@ def generate_html(tree_data: dict, edges_data: dict) -> str:
                     <span class="header-stat-label">references</span>
                 </div>
             `;
+        }}
+
+        // View mode state
+        let currentViewMode = 'tokens';
+
+        // Path weight helper functions
+        function getPathWeightColor(cumulativeTokens) {{
+            // Absolute floor: always green if < 500 tokens
+            if (cumulativeTokens < 500) return 'var(--green)';
+
+            // Get max weight for relative coloring
+            const maxWeight = PATH_WEIGHTS_DATA?.metadata?.maxPathWeight || 1;
+            const ratio = cumulativeTokens / maxWeight;
+
+            if (ratio < 0.33) return 'var(--green)';
+            if (ratio < 0.66) return 'var(--yellow)';
+            return 'var(--red)';
+        }}
+
+        function getPathWeightStrokeWidth(cumulativeTokens) {{
+            const maxWeight = PATH_WEIGHTS_DATA?.metadata?.maxPathWeight || 1;
+            const ratio = cumulativeTokens / maxWeight;
+            return 1 + ratio * 2; // 1-3px
+        }}
+
+        function setViewMode(mode) {{
+            currentViewMode = mode;
+
+            // Update toggle buttons
+            document.querySelectorAll('.view-toggle-btn').forEach(btn => {{
+                btn.classList.toggle('active', btn.dataset.mode === mode);
+            }});
+
+            // Update link colors and edge visibility
+            updateLinkColors();
+            updateEdgeVisibility();
+        }}
+
+        function updateLinkColors() {{
+            if (!g) return;
+
+            g.selectAll('path.link')
+                .classed('path-weight-green', false)
+                .classed('path-weight-yellow', false)
+                .classed('path-weight-red', false)
+                .style('stroke', null)
+                .style('stroke-width', null);
+
+            if (currentViewMode === 'pathWeight' && PATH_WEIGHTS_DATA) {{
+                g.selectAll('path.link').each(function(d) {{
+                    const targetPath = d.target.data.path;
+                    const pathData = PATH_WEIGHTS_DATA.pathWeights[targetPath];
+                    const cumulativeTokens = pathData?.cumulativeTokens || 0;
+
+                    if (cumulativeTokens > 0) {{
+                        const color = getPathWeightColor(cumulativeTokens);
+                        const width = getPathWeightStrokeWidth(cumulativeTokens);
+                        d3.select(this)
+                            .style('stroke', color)
+                            .style('stroke-width', width + 'px');
+                    }}
+                }});
+            }}
+        }}
+
+        function updateEdgeVisibility() {{
+            if (!g) return;
+
+            // In path weight mode, dim reference edges
+            g.selectAll('.edge')
+                .classed('dimmed', currentViewMode === 'pathWeight');
+        }}
+
+        function renderHeaviestPaths() {{
+            const section = document.getElementById('heaviest-paths-section');
+            const container = document.getElementById('heaviest-paths-list');
+
+            if (!PATH_WEIGHTS_DATA || !PATH_WEIGHTS_DATA.ranking || PATH_WEIGHTS_DATA.ranking.length === 0) {{
+                section.style.display = 'none';
+                return;
+            }}
+
+            section.style.display = 'block';
+
+            // Show top 10 paths
+            const topPaths = PATH_WEIGHTS_DATA.ranking.slice(0, 10);
+
+            container.innerHTML = topPaths.map((item, index) => `
+                <div class="heaviest-path-item" data-path="${{item.path}}">
+                    <span class="rank">${{index + 1}}.</span>
+                    <span class="path" title="${{item.path}}">${{item.path}}/</span>
+                    <span class="tokens" style="color: ${{getPathWeightColor(item.cumulativeTokens)}}">${{item.cumulativeTokens.toLocaleString()}}</span>
+                </div>
+            `).join('');
+
+            // Add click handlers
+            container.querySelectorAll('.heaviest-path-item').forEach(item => {{
+                item.addEventListener('click', () => {{
+                    const path = item.dataset.path;
+                    expandToPath(path + '/dummy'); // Add dummy to expand the target dir
+                    selectPath(path);
+                }});
+            }});
         }}
 
         // D3 Tree Visualization
@@ -1444,6 +1654,12 @@ def generate_html(tree_data: dict, edges_data: dict) -> str:
         initTree();
         renderAgentDocsRanking();
 
+        // Initialize path weights features if data is available
+        if (PATH_WEIGHTS_DATA) {{
+            document.getElementById('view-toggle').style.display = 'flex';
+            renderHeaviestPaths();
+        }}
+
         // Handle window resize
         window.addEventListener('resize', () => {{
             const container = document.querySelector('.tree-container');
@@ -1471,6 +1687,11 @@ def main():
         help="Input edges JSON file from sub-agent analysis",
     )
     parser.add_argument(
+        "--path-weights", "-p",
+        type=str,
+        help="Input path weights JSON file from tree.py (optional)",
+    )
+    parser.add_argument(
         "--output", "-o",
         type=str,
         default="./claude-tree",
@@ -1487,9 +1708,10 @@ def main():
     # Load input files
     tree_data = load_json(args.tree)
     edges_data = load_json(args.edges)
+    path_weights_data = load_json(args.path_weights) if args.path_weights else None
 
     # Generate HTML
-    html = generate_html(tree_data, edges_data)
+    html = generate_html(tree_data, edges_data, path_weights_data)
 
     # Create output directory and write file
     output_dir = Path(args.output)

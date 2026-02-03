@@ -46,6 +46,7 @@ The directory structure will be:
 {repo_root}/
 ├── claude-tree/           # All artifacts here (add to .gitignore if desired)
 │   ├── tree.json          # File tree with token counts
+│   ├── path_weights.json  # Pre-computed cumulative tokens for every directory
 │   ├── edges/             # Sub-agent output files
 │   │   ├── CLAUDE_md.json
 │   │   ├── src_api_AGENTS_md.json
@@ -56,12 +57,14 @@ The directory structure will be:
 └── ... (rest of repo)
 ```
 
-### Step 2: Generate File Tree
+### Step 2: Generate File Tree and Path Weights
 
-Run the tree generator to discover all files and compute token counts for agent docs:
+Run the tree generator to discover all files, compute token counts for agent docs, and generate path weights:
 
 ```bash
-uv run "$SCRIPTS/tree.py" . --output ./claude-tree/tree.json
+uv run "$SCRIPTS/tree.py" . \
+  --output ./claude-tree/tree.json \
+  --path-weights ./claude-tree/path_weights.json
 ```
 
 This outputs JSON with:
@@ -69,7 +72,7 @@ This outputs JSON with:
 - Token counts for each CLAUDE.md/AGENTS.md file
 - Summary of total agent docs and tokens
 
-**stderr output** shows agent doc paths and token warnings:
+**stderr output** shows agent doc paths, token warnings, and path weight info:
 ```
 Agent docs found:
   CLAUDE.md (847 tokens)
@@ -80,6 +83,9 @@ Warning: 1 file(s) exceed 1500 token budget:
   docs/CLAUDE.md: 2104 tokens
 
 Tree written to ./claude-tree/tree.json
+Path weights written to ./claude-tree/path_weights.json
+  Max path weight: 2050 tokens
+  Paths with tokens: 5
 ```
 
 Use the paths from stderr output to spawn sub-agents in Step 3.
@@ -136,6 +142,7 @@ Create the interactive HTML visualization:
 uv run "$SCRIPTS/visualize.py" \
   --tree ./claude-tree/tree.json \
   --edges ./claude-tree/edges.json \
+  --path-weights ./claude-tree/path_weights.json \
   --output ./claude-tree/visualization \
   --open
 ```
@@ -146,6 +153,10 @@ This generates `./claude-tree/visualization/index.html` with:
 - Directory nodes display with "/" suffix for visual distinction
 - Reference edges as curved lines (solid for agent-doc links, dashed for file links)
 - Agent walk simulator to see cumulative tokens at any directory
+- **View mode toggle** (Token Count / Path Weight):
+  - **Token Count**: Default view with nodes colored by individual token count
+  - **Path Weight**: Tree links colored by cumulative tokens (green→yellow→red based on max path weight), reference edges dimmed
+- **Heaviest Paths sidebar**: Top 10 directories by cumulative token cost, click to navigate
 - **Copy buttons** for exporting markdown reports:
   - **Copy Budget Report**: Exports a full token budget report with all agent docs, over-budget files, and recommendations
   - **Copy Context Chain**: Exports the context chain for a selected directory (appears after clicking a directory)
@@ -170,6 +181,7 @@ All edge files validated successfully.
 
 Artifacts:
 - Tree data: ./claude-tree/tree.json
+- Path weights: ./claude-tree/path_weights.json
 - Edge files: ./claude-tree/edges/ (5 files)
 - Merged edges: ./claude-tree/edges.json
 - Visualization: ./claude-tree/visualization/index.html
