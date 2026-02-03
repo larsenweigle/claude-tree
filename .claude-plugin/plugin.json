@@ -1,0 +1,8 @@
+{
+  "name": "claude-tree",
+  "description": "Analyze and visualize CLAUDE.md/AGENTS.md instruction files",
+  "version": "0.1.0",
+  "author": {
+    "name": "Larsen Weigle"
+  }
+}
