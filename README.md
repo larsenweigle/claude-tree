@@ -20,32 +20,11 @@ claude --plugin-dir /path/to/claude-tree
 
 ## How It Works
 
-```
-/claude-tree:analyze-instructions
-        │
-        ▼
-┌───────────────────────────────────┐
-│  1. tree.py                       │
-│  - Generate file tree JSON        │
-│  - Token count agent docs         │
-│  - Uses tiktoken                  │
-└───────────────────────────────────┘
-        │
-        ▼
-┌───────────────────────────────────┐
-│  2. Sub-agents (parallel)         │
-│  - Analyze each agent doc         │
-│  - Extract ALL file references    │
-│  - Output edges JSON              │
-└───────────────────────────────────┘
-        │
-        ▼
-┌───────────────────────────────────┐
-│  3. visualize.py                  │
-│  - Merge tree + edges             │
-│  - Generate D3.js HTML            │
-│  - Output to ./claude-tree/       │
-└───────────────────────────────────┘
+```mermaid
+flowchart TD
+  A["/claude-tree:analyze-instructions"] --> B["1. tree.py<br/>- Generate file tree JSON<br/>- Token count agent docs<br/>- Uses tiktoken"]
+  B --> C["2. Sub-agents (parallel)<br/>- Analyze each agent doc<br/>- Extract ALL file references<br/>- Output edges JSON"]
+  C --> D["3. visualize.py<br/>- Merge tree + edges<br/>- Generate D3.js HTML<br/>- Output to ./claude-tree/"]
 ```
 
 ## Visualization Features
