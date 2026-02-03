@@ -76,38 +76,13 @@ docs = json.load(open("./claude-tree/tree.json"))["agentDocs"]
 for d in docs: print(d["path"])
 ```
 
-For each agent doc at path `{agent_doc_path}`, use Task tool with `subagent_type: "instruction-reader"` and this prompt:
+For each agent doc, use Task tool with `subagent_type: "instruction-reader"`:
 
 ```
-Analyze the agent doc at {agent_doc_path} and extract ALL file references.
-
-Read the file and identify:
-1. Explicit markdown links: [text](path/to/file)
-2. Code block file paths mentioned
-3. Directory references like "see src/api/"
-4. Any other file/directory mentions
-
-For each reference found, determine:
-- source: the agent doc path (e.g., "src/api/AGENTS.md")
-- target: the referenced file path (e.g., "src/api/routes.ts")
-- type: "agent-doc" if target is another CLAUDE.md/AGENTS.md, otherwise "file"
-
-CRITICAL: Write your output using the Write tool to: ./claude-tree/edges/{filename}
-
-Compute {filename} from the source path by replacing "/" with "_" and "." with "_", then append ".json".
-Example: "src/api/AGENTS.md" → "src_api_AGENTS_md.json"
-
-The file MUST contain ONLY valid JSON (no markdown, no explanation).
-Start with '{' and end with '}'.
-
-{
-  "source": "{agent_doc_path}",
-  "edges": [
-    {"source": "{agent_doc_path}", "target": "path/to/target", "type": "agent-doc|file"},
-    ...
-  ]
-}
+{agent_doc_path}
 ```
+
+The agent doc contains all instructions for extraction and output.
 
 ### Step 4: Merge & Validate Edges
 

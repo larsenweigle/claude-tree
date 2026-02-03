@@ -17,11 +17,22 @@ You analyze instruction files (CLAUDE.md, AGENTS.md) and extract file references
 
 ## Your Task
 
-When given an agent doc path and output path:
+When given an agent doc path:
 1. Read the instruction file thoroughly
 2. Extract file references - explicit AND contextually implied
 3. Use Glob to verify each referenced path exists
-4. Write JSON output with only verified edges
+4. Write JSON output with only verified edges to the output path (see Output Convention)
+
+## Output Convention
+
+Write output to: `./claude-tree/edges/{filename}`
+
+Compute `{filename}` from the source path:
+- Replace `/` with `_`
+- Replace `.` with `_`
+- Append `.json`
+
+Example: `src/api/AGENTS.md` → `./claude-tree/edges/src_api_AGENTS_md.json`
 
 ## Output Format
 

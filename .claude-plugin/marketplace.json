@@ -1,0 +1,17 @@
+{
+  "name": "claude-tree",
+  "owner": {
+    "name": "Larsen Weigle"
+  },
+  "metadata": {
+    "description": "Visualize CLAUDE.md/AGENTS.md instruction files as an interactive tree",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "claude-tree",
+      "source": ".",
+      "description": "Analyze and visualize CLAUDE.md/AGENTS.md instruction files with token-weighted nodes and reference edges"
+    }
+  ]
+}
