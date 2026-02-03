@@ -14,10 +14,10 @@ Execute these steps in order:
 
 ### Step 0: Locate Plugin Scripts
 
-Find the installed scripts directory. Marketplace plugins are installed to versioned paths, so we discover the location dynamically:
+Plugin scripts are accessible via the `$CLAUDE_PLUGIN_ROOT` environment variable, which points to the plugin's installation directory:
 
 ```bash
-SCRIPTS=$(dirname "$(find ~/.claude/plugins -path "*claude-tree*/scripts/tree.py" -print -quit 2>/dev/null)")
+SCRIPTS="${CLAUDE_PLUGIN_ROOT}/skills/analyze-instructions/scripts"
 ```
 
 **Verify the scripts were found:**
@@ -30,8 +30,8 @@ You should see `tree.py`, `merge_edges.py`, and `visualize.py`.
 
 **If scripts are not found:**
 - Ensure the plugin is installed: `/plugin marketplace add larsenweigle/claude-tree`
-- Check `~/.claude/plugins/` for the installation path
-- The scripts should be at `{plugin_path}/skills/analyze-instructions/scripts/`
+- Verify `$CLAUDE_PLUGIN_ROOT` is set (it should be set automatically for marketplace plugins)
+- The scripts should be at `${CLAUDE_PLUGIN_ROOT}/skills/analyze-instructions/scripts/`
 
 ### Step 1: Create Output Directory
 
@@ -188,6 +188,12 @@ The agent walk simulator shows cumulative tokens Claude loads when working in a 
 **Note on token counts:** Token counts are approximations using OpenAI's `cl100k_base` tokenizer (via tiktoken). Claude doesn't have a public tokenizer, so actual token usage may differ slightly. The counts are directionally accurate for identifying large files and comparing relative sizes.
 
 ## Troubleshooting
+
+**Scripts not found / CLAUDE_PLUGIN_ROOT not set?**
+The `$CLAUDE_PLUGIN_ROOT` environment variable is automatically set for marketplace plugins. If it's not set:
+- Ensure the plugin is installed: `/plugin marketplace add larsenweigle/claude-tree`
+- Try updating the plugin: `/plugin marketplace update`
+- Check that you're running the skill through Claude Code (the variable is set at runtime)
 
 **Agent doc paths not visible to sub-agents?**
 The tree.py stderr output shows all agent doc paths. If you need to access them programmatically:

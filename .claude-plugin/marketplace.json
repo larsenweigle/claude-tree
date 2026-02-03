@@ -14,16 +14,11 @@
       "description": "Analyze and visualize CLAUDE.md/AGENTS.md instruction files with token-weighted nodes and reference edges",
       "version": "0.1.0",
       "author": {
-        "name": "Larsen Weigle",
-        "email": "larsen.weigle@gmail.com"
+        "name": "Larsen Weigle"
       },
       "homepage": "https://github.com/larsenweigle/claude-tree",
       "repository": "https://github.com/larsenweigle/claude-tree",
-      "license": "MIT",
-      "keywords": ["claude", "visualization", "instructions", "tree", "CLAUDE.md", "AGENTS.md"],
-      "category": "developer-tools",
-      "commands": ["./skills/analyze-instructions/"],
-      "agents": ["./agents/instruction-reader.md"]
+      "license": "MIT"
     }
   ]
 }

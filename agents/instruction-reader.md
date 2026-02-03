@@ -1,7 +1,9 @@
 ---
 name: instruction-reader
 description: Analyze instruction files (CLAUDE.md, AGENTS.md) and write structured JSON output to a specified file. Use when extracting references and analyzing agent documentation.
-tools: Read, Glob, Grep, Write
+model: sonnet
+color: cyan
+tools: ["Read", "Glob", "Grep", "Write"]
 ---
 
 # Instruction Reader Agent
