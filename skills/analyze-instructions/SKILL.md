@@ -12,6 +12,27 @@ Visualize a codebase's instruction files (CLAUDE.md, AGENTS.md) as an interactiv
 
 Execute these steps in order:
 
+### Step 0: Locate Plugin Scripts
+
+Find the installed scripts directory. Marketplace plugins are installed to versioned paths, so we discover the location dynamically:
+
+```bash
+SCRIPTS=$(dirname "$(find ~/.claude/plugins -path "*claude-tree*/scripts/tree.py" -print -quit 2>/dev/null)")
+```
+
+**Verify the scripts were found:**
+```bash
+echo "Scripts directory: $SCRIPTS"
+ls "$SCRIPTS"/*.py
+```
+
+You should see `tree.py`, `merge_edges.py`, and `visualize.py`.
+
+**If scripts are not found:**
+- Ensure the plugin is installed: `/plugin marketplace add larsenweigle/claude-tree`
+- Check `~/.claude/plugins/` for the installation path
+- The scripts should be at `{plugin_path}/skills/analyze-instructions/scripts/`
+
 ### Step 1: Create Output Directory
 
 Create the `claude-tree/` directory in the scan root for all artifacts:
@@ -40,7 +61,7 @@ The directory structure will be:
 Run the tree generator to discover all files and compute token counts for agent docs:
 
 ```bash
-uv run skills/analyze-instructions/scripts/tree.py . --output ./claude-tree/tree.json
+uv run "$SCRIPTS/tree.py" . --output ./claude-tree/tree.json
 ```
 
 This outputs JSON with:
@@ -76,7 +97,7 @@ docs = json.load(open("./claude-tree/tree.json"))["agentDocs"]
 for d in docs: print(d["path"])
 ```
 
-For each agent doc, use Task tool with `subagent_type: "instruction-reader"`:
+For each agent doc, use Task tool with `subagent_type: "claude-tree:instruction-reader"`:
 
 ```
 {agent_doc_path}
@@ -89,7 +110,7 @@ The agent doc contains all instructions for extraction and output.
 After all sub-agents complete, merge and validate their outputs:
 
 ```bash
-uv run skills/analyze-instructions/scripts/merge_edges.py \
+uv run "$SCRIPTS/merge_edges.py" \
   --input-dir ./claude-tree/edges \
   --output ./claude-tree/edges.json \
   --validate
@@ -112,7 +133,7 @@ echo '{"edges": []}' > ./claude-tree/edges.json
 Create the interactive HTML visualization:
 
 ```bash
-uv run skills/analyze-instructions/scripts/visualize.py \
+uv run "$SCRIPTS/visualize.py" \
   --tree ./claude-tree/tree.json \
   --edges ./claude-tree/edges.json \
   --output ./claude-tree/visualization \
