@@ -149,17 +149,19 @@ uv run "$SCRIPTS/visualize.py" \
 
 This generates `./claude-tree/visualization/index.html` with:
 - Collapsible tree view of the codebase
-- Agent doc nodes colored by token count (green < 500, yellow 500-1500, red > 1500)
+- Agent doc nodes colored by token count (configurable thresholds, default: green < 1,000, yellow < 2,000, red ≥ 2,000)
 - Directory nodes display with "/" suffix for visual distinction
 - Reference edges as curved lines (solid for agent-doc links, dashed for file links)
 - Agent walk simulator to see cumulative tokens at any directory
-- **View mode toggle** (Token Count / Path Weight):
-  - **Token Count**: Default view with nodes colored by individual token count
-  - **Path Weight**: Tree links colored by cumulative tokens (green→yellow→red based on max path weight), reference edges dimmed
+- **View mode toggle** (Reference View / Path View):
+  - **Reference View**: Default view showing reference edges between agent docs and files they reference
+  - **Path View**: Tree links colored by cumulative tokens using the same unified threshold system, reference edges dimmed
+- **Configurable token thresholds**: Adjust the green/yellow/red boundaries in the Legend sidebar - changes apply to both agent doc nodes and path weight colors
 - **Heaviest Paths sidebar**: Top 10 directories by cumulative token cost, click to navigate
-- **Copy buttons** for exporting markdown reports:
-  - **Copy Budget Report**: Exports a full token budget report with all agent docs, over-budget files, and recommendations
-  - **Copy Context Chain**: Exports the context chain for a selected directory (appears after clicking a directory)
+- **Section copy buttons**: Each sidebar section has a 📋 button to export markdown reports:
+  - **Agent Docs by Tokens**: Table with file, tokens, and status (✅ OK / ⚠️ Warning / 🔴 High)
+  - **Heaviest Paths**: Top 10 directories with rank, path, cumulative tokens, and status
+  - **Agent Walk Simulator**: Context chain for selected directory showing loaded instruction files
 
 ### Step 6: Report All Artifacts
 
@@ -189,11 +191,13 @@ Artifacts:
 
 ## Token Budget Guidelines
 
-From the research on instruction file best practices:
+Default thresholds (adjustable in the visualization UI):
 
-- **Green (< 500 tokens)**: Optimal - minimal context overhead
-- **Yellow (500-1500 tokens)**: Acceptable - monitor for growth
-- **Red (> 1500 tokens)**: Consider splitting or extracting shared content
+- **Green (< 1,000 tokens)**: Optimal - minimal context overhead
+- **Yellow (1,000-2,000 tokens)**: Acceptable - monitor for growth
+- **Red (≥ 2,000 tokens)**: Consider splitting or extracting shared content
+
+These are sensible defaults, but different sizes may be appropriate for different teams and codebases. Adjust the limits to your own preferences using the threshold inputs in the Legend sidebar.
 
 The agent walk simulator shows cumulative tokens Claude loads when working in a directory - this helps identify "expensive" paths in the codebase.
 

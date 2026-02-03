@@ -51,17 +51,23 @@ claude --plugin-dir /path/to/claude-tree
 ## Visualization Features
 
 - **Collapsible tree view** of your codebase
-- **Token-weighted nodes**: Agent docs colored by size
-  - Green: < 500 tokens (optimal)
-  - Yellow: 500-1500 tokens (acceptable)
-  - Red: > 1500 tokens (consider splitting)
+- **Token-weighted nodes**: Agent docs colored by size (configurable thresholds)
+  - Green: < 1,000 tokens (optimal)
+  - Yellow: 1,000-2,000 tokens (acceptable)
+  - Red: ≥ 2,000 tokens (consider splitting)
+- **Configurable thresholds**: Adjust green/yellow/red boundaries in the Legend sidebar to match your team's preferences
 - **Reference edges**: Curved lines showing file references
   - Solid: agent-doc → agent-doc
   - Dashed: agent-doc → regular file
+- **View modes**:
+  - **Reference View**: Shows reference edges between files
+  - **Path View**: Tree links colored by cumulative tokens using the same threshold system
 - **Agent walk simulator**: Click any directory to see cumulative tokens Claude loads when working there
-- **Copy to clipboard**: Export markdown reports for use with coding agents
-  - **Copy Budget Report** (header): Full token budget report with all files, over-budget warnings, and optimization recommendations
-  - **Copy Context Chain** (sidebar): Context chain for selected directory showing which CLAUDE.md files load and their token costs
+- **Heaviest Paths**: Top directories ranked by cumulative token cost
+- **Copy reports**: Each sidebar section has a copy button for markdown export
+  - **Agent Docs by Tokens**: Table of all agent docs with token counts and status
+  - **Heaviest Paths**: Top 10 directories by cumulative token cost
+  - **Agent Walk Simulator**: Context chain for selected directory
 
 ## Output
 
@@ -80,8 +86,12 @@ Add `claude-tree/` to `.gitignore` if you don't want to commit artifacts.
 
 ## Token Budget Guidelines
 
+Default thresholds (adjustable in the visualization UI):
+
 | File Type | Recommended Max |
 |-----------|-----------------|
 | Root CLAUDE.md | 2,000 tokens |
-| Subtree AGENTS.md | 1,500 tokens |
+| Subtree AGENTS.md | 2,000 tokens |
 | Total chain at any path | 5,000 tokens |
+
+These are sensible defaults, but different sizes may be appropriate for different teams and codebases. Adjust the limits to your own preferences using the threshold inputs in the Legend sidebar.

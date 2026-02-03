@@ -600,7 +600,7 @@ def generate_html(tree_data: dict, edges_data: dict, path_weights_data: dict | N
 
         /* Dimmed edges in path weight mode */
         .edge.dimmed {{
-            opacity: 0.15;
+            opacity: 0.1;
         }}
 
         /* Heaviest paths list */
@@ -646,6 +646,94 @@ def generate_html(tree_data: dict, edges_data: dict, path_weights_data: dict | N
             flex-shrink: 0;
             margin-left: 8px;
         }}
+
+        /* Section headers with copy buttons */
+        .section-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }}
+
+        .section-header h2 {{
+            margin-bottom: 0;
+        }}
+
+        .section-copy-btn {{
+            background: var(--accent);
+            border: none;
+            padding: 4px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            color: var(--bg-primary);
+            transition: all 0.15s ease;
+        }}
+
+        .section-copy-btn:hover {{
+            filter: brightness(1.2);
+        }}
+
+        .section-copy-btn.copied {{
+            background: var(--green);
+        }}
+
+        /* Token threshold settings */
+        .token-settings {{
+            margin-top: 16px;
+            padding-top: 12px;
+            border-top: 1px solid var(--border);
+        }}
+
+        .token-settings-title {{
+            font-size: 10px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }}
+
+        .threshold-row {{
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+            font-size: 11px;
+        }}
+
+        .threshold-dot {{
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }}
+
+        .threshold-label {{
+            color: var(--text-secondary);
+            min-width: 50px;
+        }}
+
+        .threshold-input {{
+            width: 70px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 3px 6px;
+            font-size: 11px;
+            color: var(--text-primary);
+            text-align: right;
+        }}
+
+        .threshold-input:focus {{
+            outline: none;
+            border-color: var(--accent);
+        }}
+
+        .threshold-suffix {{
+            color: var(--text-muted);
+            font-size: 10px;
+        }}
     </style>
 </head>
 <body>
@@ -658,9 +746,6 @@ def generate_html(tree_data: dict, edges_data: dict, path_weights_data: dict | N
                 Claude Tree
             </h1>
             <div class="header-stats" id="header-stats"></div>
-            <button class="copy-btn" onclick="copyTokenBudgetReport()" title="Copy token budget report as markdown">
-                Copy Budget Report
-            </button>
         </header>
 
         <div class="main-content">
@@ -670,8 +755,8 @@ def generate_html(tree_data: dict, edges_data: dict, path_weights_data: dict | N
                 <button class="control-btn" onclick="resetView()">Reset</button>
                 <button class="control-btn" onclick="fitToView()">Fit</button>
                 <div class="view-toggle" id="view-toggle" style="display: none;">
-                    <button class="view-toggle-btn active" data-mode="tokens" onclick="setViewMode('tokens')">Token Count</button>
-                    <button class="view-toggle-btn" data-mode="pathWeight" onclick="setViewMode('pathWeight')">Path Weight</button>
+                    <button class="view-toggle-btn active" data-mode="reference" onclick="setViewMode('reference')">Reference View</button>
+                    <button class="view-toggle-btn" data-mode="path" onclick="setViewMode('path')">Path View</button>
                 </div>
                 <span class="depth-status" id="depth-status">Depth: 2 / -</span>
                 <span class="selected-status" id="selected-status">Selected: None</span>
@@ -701,15 +786,15 @@ def generate_html(tree_data: dict, edges_data: dict, path_weights_data: dict | N
                 <h2>Legend</h2>
                 <div class="legend-item">
                     <div class="legend-dot" style="background: var(--green)"></div>
-                    <span>&lt; 500 tokens</span>
+                    <span id="legend-green-label">&lt; 1,000 tokens</span>
                 </div>
                 <div class="legend-item">
                     <div class="legend-dot" style="background: var(--yellow)"></div>
-                    <span>500 - 1500 tokens</span>
+                    <span id="legend-yellow-label">1,000 - 2,000 tokens</span>
                 </div>
                 <div class="legend-item">
                     <div class="legend-dot" style="background: var(--red)"></div>
-                    <span>&gt; 1500 tokens</span>
+                    <span id="legend-red-label">≥ 2,000 tokens</span>
                 </div>
                 <div class="legend-item" style="margin-top: 12px;">
                     <div class="legend-dot" style="background: var(--bg-tertiary); border: 1px solid var(--border)"></div>
@@ -739,26 +824,56 @@ def generate_html(tree_data: dict, edges_data: dict, path_weights_data: dict | N
                     <div class="legend-dot" style="background: transparent; border: 3px solid #f0883e; box-shadow: 0 0 4px #f0883e;"></div>
                     <span>Referenced file (highlighted)</span>
                 </div>
+
+                <div class="token-settings">
+                    <div class="token-settings-title">Token Thresholds</div>
+                    <div class="threshold-row">
+                        <div class="threshold-dot" style="background: var(--green)"></div>
+                        <span class="threshold-label">Green</span>
+                        <span>&lt;</span>
+                        <input type="number" class="threshold-input" id="threshold-green" value="1000" min="1">
+                        <span class="threshold-suffix">tokens</span>
+                    </div>
+                    <div class="threshold-row">
+                        <div class="threshold-dot" style="background: var(--yellow)"></div>
+                        <span class="threshold-label">Yellow</span>
+                        <span>&lt;</span>
+                        <input type="number" class="threshold-input" id="threshold-yellow" value="2000" min="1">
+                        <span class="threshold-suffix">tokens</span>
+                    </div>
+                    <div class="threshold-row">
+                        <div class="threshold-dot" style="background: var(--red)"></div>
+                        <span class="threshold-label">Red</span>
+                        <span>≥</span>
+                        <span id="threshold-red-display" style="color: var(--text-secondary);">2000 tokens</span>
+                    </div>
+                </div>
             </div>
 
             <div class="sidebar-section">
-                <h2>Agent Docs by Tokens</h2>
+                <div class="section-header">
+                    <h2>Agent Docs by Tokens</h2>
+                    <button class="section-copy-btn" onclick="copyAgentDocsReport()" title="Copy markdown report for agents">📋</button>
+                </div>
                 <div class="agent-docs-ranking" id="agent-docs-ranking"></div>
             </div>
 
             <div class="sidebar-section" id="heaviest-paths-section" style="display: none;">
-                <h2>Heaviest Paths</h2>
+                <div class="section-header">
+                    <h2>Heaviest Paths</h2>
+                    <button class="section-copy-btn" onclick="copyHeaviestPathsReport()" title="Copy markdown report for agents">📋</button>
+                </div>
                 <div class="instructions">Top directories by cumulative token cost when Claude works there.</div>
                 <div class="heaviest-paths-list" id="heaviest-paths-list"></div>
             </div>
 
             <div class="sidebar-section">
-                <h2>Agent Walk Simulator</h2>
+                <div class="section-header">
+                    <h2>Agent Walk Simulator</h2>
+                    <button class="section-copy-btn" id="copy-context-chain-btn" onclick="copyContextChainReport()" style="display: none;" title="Copy markdown report for agents">📋</button>
+                </div>
                 <div class="instructions">
                     Click any directory to see cumulative tokens Claude loads when working there.
-                    <button class="copy-btn" id="copy-context-chain-btn" onclick="copyContextChain()" style="display: none; margin-top: 8px;" title="Copy context chain as markdown">
-                        Copy Context Chain
-                    </button>
                 </div>
                 <div class="path-info" id="path-info">
                     <div class="path-info-title">Selected Path</div>
@@ -848,11 +963,84 @@ def generate_html(tree_data: dict, edges_data: dict, path_weights_data: dict | N
             return {{ total, breakdown }};
         }}
 
-        // Get color based on token count
+        // Global threshold state with defaults
+        let tokenThresholds = {{
+            green: 1000,
+            yellow: 2000
+        }};
+
+        // Unified color function used by BOTH agent docs and path weights
         function getTokenColor(tokens) {{
-            if (tokens < 500) return 'var(--green)';
-            if (tokens <= 1500) return 'var(--yellow)';
+            if (tokens < tokenThresholds.green) return 'var(--green)';
+            if (tokens < tokenThresholds.yellow) return 'var(--yellow)';
             return 'var(--red)';
+        }}
+
+        // Get status text based on token count
+        function getTokenStatus(tokens) {{
+            if (tokens < tokenThresholds.green) return '✅ OK';
+            if (tokens < tokenThresholds.yellow) return '⚠️ Warning';
+            return '🔴 High';
+        }}
+
+        // Update legend labels based on thresholds
+        function updateLegendLabels() {{
+            document.getElementById('legend-green-label').textContent = `< ${{tokenThresholds.green.toLocaleString()}} tokens`;
+            document.getElementById('legend-yellow-label').textContent = `${{tokenThresholds.green.toLocaleString()}} - ${{tokenThresholds.yellow.toLocaleString()}} tokens`;
+            document.getElementById('legend-red-label').textContent = `≥ ${{tokenThresholds.yellow.toLocaleString()}} tokens`;
+            document.getElementById('threshold-red-display').textContent = `${{tokenThresholds.yellow.toLocaleString()}} tokens`;
+        }}
+
+        // When thresholds change, re-render everything that uses colors
+        function updateThresholds() {{
+            // Get values from inputs
+            const greenInput = document.getElementById('threshold-green');
+            const yellowInput = document.getElementById('threshold-yellow');
+
+            const greenVal = parseInt(greenInput.value) || 500;
+            const yellowVal = parseInt(yellowInput.value) || 1500;
+
+            // Ensure green < yellow
+            if (greenVal >= yellowVal) {{
+                // Auto-adjust yellow to be higher than green
+                yellowInput.value = greenVal + 100;
+            }}
+
+            tokenThresholds.green = parseInt(greenInput.value) || 500;
+            tokenThresholds.yellow = parseInt(yellowInput.value) || 1500;
+
+            // Update legend labels
+            updateLegendLabels();
+
+            // Re-color agent doc nodes
+            if (g) {{
+                g.selectAll('g.node.agent-doc circle')
+                    .style('fill', d => getTokenColor(d.data.tokens || 0));
+            }}
+
+            // Re-color path weight links (if in path view)
+            updateLinkColors();
+
+            // Re-color sidebar rankings
+            renderAgentDocsRanking();
+            renderHeaviestPaths();
+
+            // Re-color the path info if a path is selected
+            if (selectedPath) {{
+                const {{ total, breakdown }} = getCumulativeTokens(selectedPath);
+                const tokensEl = document.getElementById('path-tokens');
+                tokensEl.style.color = getTokenColor(total);
+
+                const chainEl = document.getElementById('path-chain');
+                if (breakdown.length > 0) {{
+                    chainEl.innerHTML = breakdown.map(item => `
+                        <div class="path-chain-item">
+                            <span class="file">${{item.file}}</span>
+                            <span class="tokens" style="color: ${{getTokenColor(item.tokens)}}">${{item.tokens}}</span>
+                        </div>
+                    `).join('');
+                }}
+            }}
         }}
 
         // Toast notification helper
@@ -874,14 +1062,14 @@ def generate_html(tree_data: dict, edges_data: dict, path_weights_data: dict | N
             }}
         }}
 
-        // Copy context chain for selected directory
-        function copyContextChain() {{
+        // Copy context chain report for selected directory
+        function copyContextChainReport() {{
             if (!selectedPath) return;
 
             const {{ total, breakdown }} = getCumulativeTokens(selectedPath);
 
             let md = `## Context Chain: \`${{selectedPath}}\`\\n\\n`;
-            md += `When Claude works in this directory, these instruction files are loaded:\\n\\n`;
+            md += `When Claude works in this directory, these instruction files load:\\n\\n`;
             md += `| File | Tokens |\\n`;
             md += `|------|--------|\\n`;
 
@@ -889,20 +1077,62 @@ def generate_html(tree_data: dict, edges_data: dict, path_weights_data: dict | N
                 md += `| \`${{item.file}}\` | ${{item.tokens.toLocaleString()}} |\\n`;
             }});
 
-            md += `\\n**Total context cost: ${{total.toLocaleString()}} tokens**\\n\\n`;
-            md += `---\\n\\n`;
-            md += `### Review These Files\\n\\n`;
-            md += `To reduce context overhead, review each file for:\\n`;
-            md += `- Redundant information duplicated from parent docs\\n`;
-            md += `- Content that could be linked instead of inlined\\n`;
-            md += `- Sections that could be moved to more specific subdirectory docs\\n\\n`;
-
-            breakdown.forEach(item => {{
-                md += `- [ ] \`${{item.file}}\` (${{item.tokens.toLocaleString()}} tokens)\\n`;
-            }});
+            md += `\\n**Total context cost: ${{total.toLocaleString()}} tokens**\\n`;
 
             copyToClipboard(md).then(success => {{
+                const btn = document.getElementById('copy-context-chain-btn');
+                if (success) {{
+                    btn.classList.add('copied');
+                    btn.textContent = '✓';
+                    setTimeout(() => {{
+                        btn.classList.remove('copied');
+                        btn.textContent = '📋';
+                    }}, 2000);
+                }}
                 showToast(success ? 'Context chain copied!' : 'Failed to copy');
+            }});
+        }}
+
+        // Copy agent docs report
+        function copyAgentDocsReport() {{
+            const sortedDocs = Array.from(agentDocTokens.entries())
+                .sort((a, b) => b[1] - a[1]);
+
+            let md = `## Agent Docs by Token Count\\n\\n`;
+            md += `| File | Tokens | Status |\\n`;
+            md += `|------|--------|--------|\\n`;
+
+            sortedDocs.forEach(([path, tokens]) => {{
+                const status = getTokenStatus(tokens);
+                md += `| \`${{path}}\` | ${{tokens.toLocaleString()}} | ${{status}} |\\n`;
+            }});
+
+            md += `\\n**Thresholds:** Green < ${{tokenThresholds.green.toLocaleString()}}, Yellow < ${{tokenThresholds.yellow.toLocaleString()}}, Red ≥ ${{tokenThresholds.yellow.toLocaleString()}}\\n`;
+
+            copyToClipboard(md).then(success => {{
+                showToast(success ? 'Agent docs report copied!' : 'Failed to copy');
+            }});
+        }}
+
+        // Copy heaviest paths report
+        function copyHeaviestPathsReport() {{
+            if (!PATH_WEIGHTS_DATA || !PATH_WEIGHTS_DATA.ranking) return;
+
+            const topPaths = PATH_WEIGHTS_DATA.ranking.slice(0, 10);
+
+            let md = `## Heaviest Paths (Cumulative Tokens)\\n\\n`;
+            md += `| Rank | Path | Cumulative Tokens | Status |\\n`;
+            md += `|------|------|-------------------|--------|\\n`;
+
+            topPaths.forEach((item, index) => {{
+                const status = getTokenStatus(item.cumulativeTokens);
+                md += `| ${{index + 1}} | \`${{item.path}}/\` | ${{item.cumulativeTokens.toLocaleString()}} | ${{status}} |\\n`;
+            }});
+
+            md += `\\nThese paths have the highest context cost when Claude works in them.\\n`;
+
+            copyToClipboard(md).then(success => {{
+                showToast(success ? 'Heaviest paths report copied!' : 'Failed to copy');
             }});
         }}
 
@@ -976,20 +1206,12 @@ def generate_html(tree_data: dict, edges_data: dict, path_weights_data: dict | N
         }}
 
         // View mode state
-        let currentViewMode = 'tokens';
+        let currentViewMode = 'reference';
 
-        // Path weight helper functions
+        // Path weight helper functions - use unified color system
         function getPathWeightColor(cumulativeTokens) {{
-            // Absolute floor: always green if < 500 tokens
-            if (cumulativeTokens < 500) return 'var(--green)';
-
-            // Get max weight for relative coloring
-            const maxWeight = PATH_WEIGHTS_DATA?.metadata?.maxPathWeight || 1;
-            const ratio = cumulativeTokens / maxWeight;
-
-            if (ratio < 0.33) return 'var(--green)';
-            if (ratio < 0.66) return 'var(--yellow)';
-            return 'var(--red)';
+            // Use the same unified getTokenColor function with user-configurable thresholds
+            return getTokenColor(cumulativeTokens);
         }}
 
         function getPathWeightStrokeWidth(cumulativeTokens) {{
@@ -1014,14 +1236,13 @@ def generate_html(tree_data: dict, edges_data: dict, path_weights_data: dict | N
         function updateLinkColors() {{
             if (!g) return;
 
+            // Reset all link styles first
             g.selectAll('path.link')
-                .classed('path-weight-green', false)
-                .classed('path-weight-yellow', false)
-                .classed('path-weight-red', false)
                 .style('stroke', null)
                 .style('stroke-width', null);
 
-            if (currentViewMode === 'pathWeight' && PATH_WEIGHTS_DATA) {{
+            // In path view, color links by cumulative tokens
+            if (currentViewMode === 'path' && PATH_WEIGHTS_DATA) {{
                 g.selectAll('path.link').each(function(d) {{
                     const targetPath = d.target.data.path;
                     const pathData = PATH_WEIGHTS_DATA.pathWeights[targetPath];
@@ -1041,9 +1262,10 @@ def generate_html(tree_data: dict, edges_data: dict, path_weights_data: dict | N
         function updateEdgeVisibility() {{
             if (!g) return;
 
-            // In path weight mode, dim reference edges
+            // In path view, dim reference edges significantly
+            // In reference view, show them normally
             g.selectAll('.edge')
-                .classed('dimmed', currentViewMode === 'pathWeight');
+                .classed('dimmed', currentViewMode === 'path');
         }}
 
         function renderHeaviestPaths() {{
@@ -1126,6 +1348,7 @@ def generate_html(tree_data: dict, edges_data: dict, path_weights_data: dict | N
 
             update(root);
             renderEdges();
+            updateEdgeVisibility();
             updateDepthDisplay();
         }}
 
@@ -1144,6 +1367,7 @@ def generate_html(tree_data: dict, edges_data: dict, path_weights_data: dict | N
             currentVisibleDepth--;
             update(root);
             renderEdges();
+            updateEdgeVisibility();
             updateDepthDisplay();
         }}
 
@@ -1193,6 +1417,7 @@ def generate_html(tree_data: dict, edges_data: dict, path_weights_data: dict | N
 
             update(root);
             renderEdges();
+            updateEdgeVisibility();
             updateDepthDisplay();
         }}
 
@@ -1262,6 +1487,7 @@ def generate_html(tree_data: dict, edges_data: dict, path_weights_data: dict | N
                         }}
                         update(d);
                         renderEdges();
+                        updateEdgeVisibility();
                     }}
                 }})
                 .on('mouseover', showTooltip)
@@ -1453,9 +1679,11 @@ def generate_html(tree_data: dict, edges_data: dict, path_weights_data: dict | N
                 chainEl.innerHTML = '<div style="color: var(--text-muted); font-size: 11px;">No agent docs in path</div>';
             }}
 
-            // Show/hide copy context chain button
-            document.getElementById('copy-context-chain-btn').style.display =
-                breakdown.length > 0 ? 'inline-block' : 'none';
+            // Show/hide copy context chain button (in section header)
+            const copyBtn = document.getElementById('copy-context-chain-btn');
+            copyBtn.style.display = breakdown.length > 0 ? 'inline-block' : 'none';
+            copyBtn.textContent = '📋';  // Reset button text
+            copyBtn.classList.remove('copied');
         }}
 
         // Clear all highlighting
@@ -1533,6 +1761,7 @@ def generate_html(tree_data: dict, edges_data: dict, path_weights_data: dict | N
 
             update(root);
             renderEdges();
+            updateEdgeVisibility();
         }}
 
         // Render agent docs ranking
@@ -1621,7 +1850,10 @@ def generate_html(tree_data: dict, edges_data: dict, path_weights_data: dict | N
             document.getElementById('path-tokens').textContent = '-';
             document.getElementById('path-tokens').style.color = '';
             document.getElementById('path-chain').innerHTML = '';
-            document.getElementById('copy-context-chain-btn').style.display = 'none';
+            const copyBtn = document.getElementById('copy-context-chain-btn');
+            copyBtn.style.display = 'none';
+            copyBtn.textContent = '📋';
+            copyBtn.classList.remove('copied');
             g.selectAll('g.node').classed('highlighted', false).classed('selected', false);
             g.selectAll('path.link').classed('highlighted', false);
             // Clear agent doc highlighting
@@ -1630,6 +1862,7 @@ def generate_html(tree_data: dict, edges_data: dict, path_weights_data: dict | N
             svg.transition().duration(500).call(window.zoomBehavior.transform, d3.zoomIdentity);
             update(root);
             renderEdges();
+            updateEdgeVisibility();
             updateDepthDisplay();
         }}
 
@@ -1659,6 +1892,13 @@ def generate_html(tree_data: dict, edges_data: dict, path_weights_data: dict | N
             document.getElementById('view-toggle').style.display = 'flex';
             renderHeaviestPaths();
         }}
+
+        // Initialize threshold input listeners
+        document.getElementById('threshold-green').addEventListener('input', updateThresholds);
+        document.getElementById('threshold-yellow').addEventListener('input', updateThresholds);
+
+        // Initialize legend labels
+        updateLegendLabels();
 
         // Handle window resize
         window.addEventListener('resize', () => {{
