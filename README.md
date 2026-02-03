@@ -5,8 +5,10 @@ Visualize CLAUDE.md/AGENTS.md instruction files as an interactive tree with toke
 ## Installation
 
 ```bash
-# Test locally during development
-claude --plugin-dir /path/to/claude-tree
+# Adding the plugin marketplace to Claude Code
+/plugin marketplace add larsenweigle/claude-tree
+
+# You will need to enable it with the /plugin command once installed
 
 # Then invoke the skill
 /claude-tree:analyze-instructions
