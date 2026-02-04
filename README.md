@@ -2,7 +2,9 @@
 
 Visualize CLAUDE.md/AGENTS.md instruction files as an interactive tree with token-weighted nodes and reference edges.
 
-[![Demo video](https://img.youtube.com/vi/TX1RPcNm0EM/hqdefault.jpg)](https://youtu.be/TX1RPcNm0EM)
+<a href="https://youtu.be/TX1RPcNm0EM">
+  <img src="https://img.youtube.com/vi/TX1RPcNm0EM/maxresdefault.jpg" width="800" />
+</a>
 
 ## Installation
 
