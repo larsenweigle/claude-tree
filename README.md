@@ -4,7 +4,9 @@ Visualize CLAUDE.md/AGENTS.md instruction files as an interactive tree with toke
 
 ## Installation
 
-Run these commands inside of Claude Code
+Run these commands inside of Claude Code.
+
+NOTE: once you enable the plugin you may need to exit Claude Code and start a new session or resume the previous one.
 
 ```bash
 # Adding the plugin marketplace to Claude Code
@@ -14,6 +16,8 @@ Run these commands inside of Claude Code
 
 # Then invoke the skill
 /claude-tree:analyze-instructions
+# or
+/analyze-instructions
 ```
 
 ## Requirements
