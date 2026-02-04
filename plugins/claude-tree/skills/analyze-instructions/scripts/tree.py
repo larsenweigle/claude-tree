@@ -147,6 +147,7 @@ def build_tree(root_path: Path, tokenizer) -> dict:
                 # Add token count for agent docs
                 if is_agent_doc(entry):
                     file_node["isAgentDoc"] = True
+                    file_node["agentType"] = "claude" if entry.lower() == "claude.md" else "agents"
                     try:
                         content = entry_path.read_text(encoding="utf-8")
                         file_node["tokens"] = count_tokens(content, tokenizer)

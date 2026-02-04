@@ -1,0 +1,8 @@
+{
+  "name": "claude-tree",
+  "description": "Analyze and visualize CLAUDE.md/AGENTS.md instruction files with token-weighted nodes and reference edges",
+  "version": "0.1.0",
+  "author": {
+    "name": "Larsen Weigle"
+  }
+}

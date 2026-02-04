@@ -131,8 +131,15 @@ def generate_html(tree_data: dict, edges_data: dict, path_weights_data: dict | N
         .tree-container {{
             width: 100%;
             height: 100%;
-            overflow: auto;
+            overflow: hidden;
             cursor: grab;
+            position: relative;
+        }}
+
+        #tree {{
+            width: 100%;
+            height: 100%;
+            display: block;
         }}
 
         .tree-container:active {{
@@ -585,6 +592,39 @@ def generate_html(tree_data: dict, edges_data: dict, path_weights_data: dict | N
             color: var(--bg-primary);
         }}
 
+        /* Doc type toggle */
+        .doc-type-toggle {{
+            display: flex;
+            gap: 0;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-left: 8px;
+        }}
+
+        .doc-type-btn {{
+            background: var(--bg-secondary);
+            border: none;
+            padding: 6px 10px;
+            font-size: 11px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }}
+
+        .doc-type-btn:not(:last-child) {{
+            border-right: 1px solid var(--border);
+        }}
+
+        .doc-type-btn:hover {{
+            background: var(--bg-tertiary);
+        }}
+
+        .doc-type-btn.active {{
+            background: var(--accent);
+            color: var(--bg-primary);
+        }}
+
         /* Path weight mode link styles */
         .link.path-weight-green {{
             stroke: var(--green);
@@ -601,6 +641,7 @@ def generate_html(tree_data: dict, edges_data: dict, path_weights_data: dict | N
         /* Dimmed edges in path weight mode */
         .edge.dimmed {{
             opacity: 0.1;
+            pointer-events: none;
         }}
 
         /* Heaviest paths list */
@@ -741,7 +782,7 @@ def generate_html(tree_data: dict, edges_data: dict, path_weights_data: dict | N
         <header>
             <h1>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                    <path d="M12 3v18M12 7l-4-4M12 7l4-4M12 13l-6-4M12 13l6-4M12 19l-8-4M12 19l8-4"/>
                 </svg>
                 Claude Tree
             </h1>
@@ -757,6 +798,11 @@ def generate_html(tree_data: dict, edges_data: dict, path_weights_data: dict | N
                 <div class="view-toggle" id="view-toggle" style="display: none;">
                     <button class="view-toggle-btn active" data-mode="reference" onclick="setViewMode('reference')">Reference View</button>
                     <button class="view-toggle-btn" data-mode="path" onclick="setViewMode('path')">Path View</button>
+                </div>
+                <div class="doc-type-toggle" id="doc-type-toggle">
+                    <button class="doc-type-btn active" data-type="all" onclick="setDocTypeFilter('all')">All</button>
+                    <button class="doc-type-btn" data-type="claude" onclick="setDocTypeFilter('claude')">CLAUDE.md</button>
+                    <button class="doc-type-btn" data-type="agents" onclick="setDocTypeFilter('agents')">AGENTS.md</button>
                 </div>
                 <span class="depth-status" id="depth-status">Depth: 2 / -</span>
                 <span class="selected-status" id="selected-status">Selected: None</span>
@@ -924,18 +970,60 @@ def generate_html(tree_data: dict, edges_data: dict, path_weights_data: dict | N
             indexTree(TREE_DATA.tree);
         }}
 
+        // Doc type filter state
+        let activeDocTypeFilter = 'all';  // 'all', 'claude', or 'agents'
+
+        // Helper to check if a path matches current filter
+        function matchesDocTypeFilter(path) {{
+            if (activeDocTypeFilter === 'all') return true;
+            const filename = path.split('/').pop().toLowerCase();
+            if (activeDocTypeFilter === 'claude') {{
+                return filename === 'claude.md';
+            }}
+            if (activeDocTypeFilter === 'agents') {{
+                return filename === 'agents.md';
+            }}
+            return true;
+        }}
+
+        // Set doc type filter
+        function setDocTypeFilter(filterType) {{
+            activeDocTypeFilter = filterType;
+
+            // Update toggle buttons
+            document.querySelectorAll('.doc-type-btn').forEach(btn => {{
+                btn.classList.toggle('active', btn.dataset.type === filterType);
+            }});
+
+            // Re-render everything that uses agent doc data
+            updateLinkColors();
+            renderAgentDocsRanking();
+            renderHeaviestPaths();
+            updateHeaderStats();
+
+            // Update sidebar if path selected
+            if (selectedPath) {{
+                selectPath(selectedPath);
+            }}
+        }}
+
         // Calculate cumulative tokens for a path
         function getCumulativeTokens(path) {{
             const parts = path === '.' ? ['.'] : path.split('/');
             let total = 0;
             const breakdown = [];
 
-            // Check root first
-            if (agentDocTokens.has('./CLAUDE.md') || agentDocTokens.has('CLAUDE.md')) {{
-                const rootPath = agentDocTokens.has('./CLAUDE.md') ? './CLAUDE.md' : 'CLAUDE.md';
-                const tokens = agentDocTokens.get(rootPath);
-                total += tokens;
-                breakdown.push({{ file: rootPath, tokens }});
+            // Check root first (respect filter)
+            for (const docName of ['CLAUDE.md', 'AGENTS.md']) {{
+                const rootPaths = [`./${{docName}}`, docName];
+                for (const rootPath of rootPaths) {{
+                    if (agentDocTokens.has(rootPath) && matchesDocTypeFilter(rootPath)) {{
+                        const tokens = agentDocTokens.get(rootPath);
+                        total += tokens;
+                        breakdown.push({{ file: rootPath, tokens }});
+                        break;
+                    }}
+                }}
             }}
 
             // Walk down the path
@@ -944,16 +1032,16 @@ def generate_html(tree_data: dict, edges_data: dict, path_weights_data: dict | N
                 if (parts[i] === '.') continue;
                 currentPath = currentPath === '.' ? parts[i] : currentPath + '/' + parts[i];
 
-                // Check for agent docs in this directory
+                // Check for agent docs in this directory (respect filter)
                 const claudePath = currentPath + '/CLAUDE.md';
                 const agentsPath = currentPath + '/AGENTS.md';
 
-                if (agentDocTokens.has(claudePath)) {{
+                if (agentDocTokens.has(claudePath) && matchesDocTypeFilter(claudePath)) {{
                     const tokens = agentDocTokens.get(claudePath);
                     total += tokens;
                     breakdown.push({{ file: claudePath, tokens }});
                 }}
-                if (agentDocTokens.has(agentsPath)) {{
+                if (agentDocTokens.has(agentsPath) && matchesDocTypeFilter(agentsPath)) {{
                     const tokens = agentDocTokens.get(agentsPath);
                     total += tokens;
                     breakdown.push({{ file: agentsPath, tokens }});
@@ -1184,15 +1272,27 @@ def generate_html(tree_data: dict, edges_data: dict, path_weights_data: dict | N
 
         // Render header stats
         function renderHeaderStats() {{
+            updateHeaderStats();
+        }}
+
+        // Update header stats (respects doc type filter)
+        function updateHeaderStats() {{
             const el = document.getElementById('header-stats');
-            const totalDocs = TREE_DATA.totalAgentDocs || 0;
-            const totalTokens = TREE_DATA.totalTokens || 0;
+
+            // Calculate filtered stats
+            const filteredDocs = Array.from(agentDocTokens.entries())
+                .filter(([path, tokens]) => matchesDocTypeFilter(path));
+            const totalDocs = filteredDocs.length;
+            const totalTokens = filteredDocs.reduce((sum, [path, tokens]) => sum + tokens, 0);
             const edgeCount = EDGES_DATA.edges?.length || 0;
+
+            // Show filter indicator if not showing all
+            const filterLabel = activeDocTypeFilter === 'all' ? '' : ` (${{activeDocTypeFilter === 'claude' ? 'CLAUDE.md' : 'AGENTS.md'}})`;
 
             el.innerHTML = `
                 <div class="header-stat">
                     <span class="header-stat-value">${{totalDocs}}</span>
-                    <span class="header-stat-label">agent docs</span>
+                    <span class="header-stat-label">agent docs${{filterLabel}}</span>
                 </div>
                 <div class="header-stat">
                     <span class="header-stat-value">${{totalTokens.toLocaleString()}}</span>
@@ -1241,16 +1341,25 @@ def generate_html(tree_data: dict, edges_data: dict, path_weights_data: dict | N
                 .style('stroke', null)
                 .style('stroke-width', null);
 
-            // In path view, color links by cumulative tokens
+            // In path view, color links by cumulative tokens (respecting filter)
             if (currentViewMode === 'path' && PATH_WEIGHTS_DATA) {{
+                // Recalculate max weight for current filter
+                let maxFilteredWeight = 0;
+                Object.keys(PATH_WEIGHTS_DATA.pathWeights).forEach(path => {{
+                    const {{ total }} = getCumulativeTokens(path);
+                    if (total > maxFilteredWeight) maxFilteredWeight = total;
+                }});
+
                 g.selectAll('path.link').each(function(d) {{
                     const targetPath = d.target.data.path;
-                    const pathData = PATH_WEIGHTS_DATA.pathWeights[targetPath];
-                    const cumulativeTokens = pathData?.cumulativeTokens || 0;
+                    // Recalculate tokens with current filter
+                    const {{ total: cumulativeTokens }} = getCumulativeTokens(targetPath);
 
                     if (cumulativeTokens > 0) {{
                         const color = getPathWeightColor(cumulativeTokens);
-                        const width = getPathWeightStrokeWidth(cumulativeTokens);
+                        // Calculate width based on filtered max
+                        const ratio = maxFilteredWeight > 0 ? cumulativeTokens / maxFilteredWeight : 0;
+                        const width = 1 + ratio * 2; // 1-3px
                         d3.select(this)
                             .style('stroke', color)
                             .style('stroke-width', width + 'px');
@@ -1279,8 +1388,23 @@ def generate_html(tree_data: dict, edges_data: dict, path_weights_data: dict | N
 
             section.style.display = 'block';
 
+            // Recalculate path weights based on current filter
+            const recalculatedPaths = PATH_WEIGHTS_DATA.ranking.map(item => {{
+                const {{ total }} = getCumulativeTokens(item.path);
+                return {{ path: item.path, cumulativeTokens: total }};
+            }}).filter(item => item.cumulativeTokens > 0)
+              .sort((a, b) => b.cumulativeTokens - a.cumulativeTokens);
+
+            if (recalculatedPaths.length === 0) {{
+                const filterMsg = activeDocTypeFilter === 'all'
+                    ? 'No paths with agent docs'
+                    : `No paths with ${{activeDocTypeFilter === 'claude' ? 'CLAUDE.md' : 'AGENTS.md'}} files`;
+                container.innerHTML = `<div style="color: var(--text-muted); font-size: 11px; padding: 8px;">${{filterMsg}}</div>`;
+                return;
+            }}
+
             // Show top 10 paths
-            const topPaths = PATH_WEIGHTS_DATA.ranking.slice(0, 10);
+            const topPaths = recalculatedPaths.slice(0, 10);
 
             container.innerHTML = topPaths.map((item, index) => `
                 <div class="heaviest-path-item" data-path="${{item.path}}">
@@ -1304,6 +1428,7 @@ def generate_html(tree_data: dict, edges_data: dict, path_weights_data: dict | N
         let root, svg, g, treeLayout;
         let selectedPath = null;
         let selectedAgentDoc = null;
+        let initialRenderComplete = false;
 
         // Depth tracking for level-by-level expand/collapse
         let maxTreeDepth = 0;
@@ -1383,14 +1508,16 @@ def generate_html(tree_data: dict, edges_data: dict, path_weights_data: dict | N
             const width = Math.max(800, container.clientWidth);
 
             svg = d3.select('#tree')
-                .attr('width', width);
+                .attr('width', '100%')
+                .attr('height', '100%');
 
             g = svg.append('g')
                 .attr('transform', `translate(${{margin.left}},${{margin.top}})`);
 
             // Add zoom behavior
             const zoom = d3.zoom()
-                .scaleExtent([0.2, 4])
+                .scaleExtent([0.1, 4])
+                .translateExtent([[-Infinity, -Infinity], [Infinity, Infinity]])
                 .on('zoom', (event) => {{
                     g.attr('transform', event.transform);
                 }});
@@ -1436,15 +1563,15 @@ def generate_html(tree_data: dict, edges_data: dict, path_weights_data: dict | N
                 d.y = d.depth * 180;
             }});
 
-            // Calculate height based on visible nodes
-            let minX = Infinity, maxX = -Infinity;
-            nodes.forEach(d => {{
-                if (d.x < minX) minX = d.x;
-                if (d.x > maxX) maxX = d.x;
-            }});
-            const height = maxX - minX + 100;
-            svg.attr('height', height + 40);
-            g.attr('transform', `translate(80,${{-minX + 20}})`);
+            // Calculate bounds - only set initial position on first render
+            if (!initialRenderComplete) {{
+                let minX = Infinity;
+                nodes.forEach(d => {{
+                    if (d.x < minX) minX = d.x;
+                }});
+                g.attr('transform', `translate(80,${{-minX + 20}})`);
+                initialRenderComplete = true;
+            }}
 
             // Update nodes
             const node = g.selectAll('g.node')
@@ -1768,12 +1895,16 @@ def generate_html(tree_data: dict, edges_data: dict, path_weights_data: dict | N
         function renderAgentDocsRanking() {{
             const container = document.getElementById('agent-docs-ranking');
 
-            // Get all agent docs and sort by token count descending
+            // Get all agent docs and sort by token count descending, filtered by doc type
             const sortedDocs = Array.from(agentDocTokens.entries())
+                .filter(([path, tokens]) => matchesDocTypeFilter(path))
                 .sort((a, b) => b[1] - a[1]);
 
             if (sortedDocs.length === 0) {{
-                container.innerHTML = '<div style="color: var(--text-muted); font-size: 11px; padding: 8px;">No agent docs found</div>';
+                const filterMsg = activeDocTypeFilter === 'all'
+                    ? 'No agent docs found'
+                    : `No ${{activeDocTypeFilter === 'claude' ? 'CLAUDE.md' : 'AGENTS.md'}} files found`;
+                container.innerHTML = `<div style="color: var(--text-muted); font-size: 11px; padding: 8px;">${{filterMsg}}</div>`;
                 return;
             }}
 
@@ -1858,15 +1989,16 @@ def generate_html(tree_data: dict, edges_data: dict, path_weights_data: dict | N
             g.selectAll('path.link').classed('highlighted', false);
             // Clear agent doc highlighting
             clearAllHighlighting();
-            // Reset zoom
+            // Reset zoom and allow initial positioning
             svg.transition().duration(500).call(window.zoomBehavior.transform, d3.zoomIdentity);
+            initialRenderComplete = false;
             update(root);
             renderEdges();
             updateEdgeVisibility();
             updateDepthDisplay();
         }}
 
-        function fitToView() {{
+        function fitToView(zoomFactor = 0.9) {{
             const bounds = g.node().getBBox();
             const container = document.querySelector('.tree-container');
             const fullWidth = container.clientWidth;
@@ -1874,7 +2006,7 @@ def generate_html(tree_data: dict, edges_data: dict, path_weights_data: dict | N
             const scale = Math.min(
                 fullWidth / (bounds.width + 40),
                 fullHeight / (bounds.height + 40)
-            ) * 0.9;
+            ) * zoomFactor;
             const transform = d3.zoomIdentity
                 .translate(fullWidth / 2, fullHeight / 2)
                 .scale(scale)
@@ -1885,6 +2017,8 @@ def generate_html(tree_data: dict, edges_data: dict, path_weights_data: dict | N
         // Initialize
         renderHeaderStats();
         initTree();
+        // Center tree in viewport on load (more zoomed out)
+        setTimeout(() => fitToView(0.175), 100);
         renderAgentDocsRanking();
 
         // Initialize path weights features if data is available
@@ -1902,8 +2036,7 @@ def generate_html(tree_data: dict, edges_data: dict, path_weights_data: dict | N
 
         // Handle window resize
         window.addEventListener('resize', () => {{
-            const container = document.querySelector('.tree-container');
-            svg.attr('width', container.clientWidth);
+            // CSS percentage sizing handles resize automatically
         }});
     </script>
 </body>
